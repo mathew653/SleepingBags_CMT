@@ -1,0 +1,16 @@
+[
+{
+  "modid": "sleepingbags_upport_cmt",
+  "name": "Sleeping bags up port(coremod)",
+  "description": "Vanilla code tweaks to make sleeping bags work correct",
+  "version": "${version}",
+  "mcversion": "${mcversion}",
+  "url": "",
+  "updateUrl": "",
+  "authorList": ["mathew_653"],
+  "credits": "",
+  "logoFile": "",
+  "screenshots": [],
+  "dependencies": []
+}
+]

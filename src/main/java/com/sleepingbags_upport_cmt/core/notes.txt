@@ -1,0 +1,113 @@
+In order to load the container we must pass the following to the JVM args:
+-Dfml.coreMods.load=com.sleepingbags_upport_cmt.core.SleepingbagsPlugin
+
+At the moment forge will complain about a certificate this will need sorting in build version.
+
+Referenced code from:
+https://github.com/Tommsy64/PlayerAPI/tree/mc1.12/src/main/java/api/player/client
+
+Snippet:
+    from ClientPlayerAPI
+    public static float getBedOrientationInDegrees(IClientPlayerAPI target)
+    {
+        float _result;
+        ClientPlayerAPI clientPlayerAPI = target.getClientPlayerAPI();
+        if(clientPlayerAPI != null && clientPlayerAPI.isGetBedOrientationInDegreesModded)
+            _result = clientPlayerAPI.getBedOrientationInDegrees();
+        else
+            _result = target.localGetBedOrientationInDegrees();
+        return _result;
+    }
+    
+    private float getBedOrientationInDegrees()
+    {
+        if(beforeGetBedOrientationInDegreesHooks != null)
+            for(int i = beforeGetBedOrientationInDegreesHooks.length - 1; i >= 0 ; i--)
+                beforeGetBedOrientationInDegreesHooks[i].beforeGetBedOrientationInDegrees();
+
+        float _result;
+        if(overrideGetBedOrientationInDegreesHooks != null)
+            _result = overrideGetBedOrientationInDegreesHooks[overrideGetBedOrientationInDegreesHooks.length - 1].getBedOrientationInDegrees();
+        else
+            _result = player.localGetBedOrientationInDegrees();
+
+        if(afterGetBedOrientationInDegreesHooks != null)
+            for(int i = 0; i < afterGetBedOrientationInDegreesHooks.length; i++)
+                afterGetBedOrientationInDegreesHooks[i].afterGetBedOrientationInDegrees();
+
+        return _result;
+    }
+    
+    next:
+    https://github.com/Tommsy64/PlayerAPI/tree/mc1.12/src/main/java/api/player/client
+    IClientPlayer and IClientPlayerAPI
+    (Can these be condensed?)
+    
+
+Sofar this has fixed the render issues
+
+Next: Camera yaw.
+(RenderManager?)
+RenderManager::cacheActiveRenderInfo
+line 288
+IBlockState iblockstate = worldIn.getBlockState(new BlockPos(livingPlayerIn));
+Block block = iblockstate.getBlock();
+
+if (block.isBed(iblockstate, worldIn, new BlockPos(livingPlayerIn), (EntityLivingBase)livingPlayerIn))
+{
+    int i = block.getBedDirection(iblockstate, worldIn, new BlockPos(livingPlayerIn)).getHorizontalIndex();
+    this.playerViewY = (float)(i * 90 + 180);
+    this.playerViewX = 0.0F;
+}
+
+Suspecting that this will need renaming and detouring.
+(Detouring this seemed to have no affect on bed camera yaw 'overiding')
+
+Assuming the construct in question is checking block.isBed then maybe hooking this, and stack walking will provide insight to where we are loooking for our intercept point.
+
+Snippet for obtaining caller(untested):
+"
+public static String getCallerClassName() 
+{ 
+        StackTraceElement[] stElements = Thread.currentThread().getStackTrace();
+        for (int i=1; i<stElements.length; i++) 
+	{
+            StackTraceElement ste = stElements[i];
+            if (!ste.getClassName().equals(KDebug.class.getName()) && ste.getClassName().indexOf("java.lang.Thread")!=0) 
+	    {
+                return ste.getClassName();
+            }
+        }
+        return null;
+}
+"
+
+Should be handy to index all calls that are checking this(Should show us all the hiding places).
+
+obs mapping:
+bua AbstractPlayer
+bzf net/minecraft/client/renderer/entity/RenderManager
+
+Appears all along there may have been a forge hook for this:
+orientBedCamera
+ref EntityRenderer.class line 617!
+
+Meaning hooking this:
+
+net.minecraftforge.client.ForgeHooksClient.orientBedCamera (line 146)
+will let us make work our tricks(Hopefully).
+Added benefit as this is with the forge base code, it won't be obfuscated! (To my understanding)
+
+
+Note on 1.14 orientBedCamera don't exist in net.minecraftforge.client.ForgeHooksClient.orientBedCamera, so a different hook will be needed to emulate it on a lower level.
+Likely meaning the 1.14 build will either need obfuscation mapping or a new approach but more then likely obfuscation mapping for 1.14 for the camera fixup.
+
+Should be able to hook the player renderer from the renderer table though for orientating the model.
+ref for 1.12.x:
+applyRotations of RenderPlayer.class is only protected level on the object def so this can be leaveraged via extending the class.
+
+net.minecraft.client.renderer.entity.RenderManager
+line 233, 234 and 235 handle player rendering tables.
+line 123 and 124 handle the objects relating to storing the references, these would likely need fixing in turn via reflection.
+
+
